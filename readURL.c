@@ -1,4 +1,4 @@
-// Taken from https://stackoverflow.com/questions/13905774/in-c-how-do-you-use-libcurl-to-read-a-http-response-into-a-string
+// HTML get codeaken from https://stackoverflow.com/questions/13905774/in-c-how-do-you-use-libcurl-to-read-a-http-response-into-a-string
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,6 +8,10 @@
 
 char* base_str="href=\"";
 char* base_str_wiki="href=\"/wiki/";
+
+void readURLInit(){
+    curl_global_init(CURL_GLOBAL_ALL);
+}
 
 char *strndup(const char *s, int n){//Not defined for reasons beyond my comprehension
     char *p = malloc(n+1);

@@ -10,4 +10,5 @@ size_t write_data(void *ptr, size_t size, size_t nmemb, struct url_data *data);
 char* getHTML(char* url);
 char** scanLinks(char* HTML, int* num_scanned);
 char *strndup(const char *s, int n);
+void readURLInit();
 #endif

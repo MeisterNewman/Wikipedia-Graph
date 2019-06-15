@@ -2,7 +2,7 @@
 #define QUEUE_H_INCLUDED
 
 struct QNode{ 
-    int key;
+    long key;
     struct QNode *next;
 };
 struct Queue{
