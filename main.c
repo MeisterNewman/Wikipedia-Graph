@@ -6,9 +6,10 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <errno.h>
+#include <poll.h>
 //#include "readURL.h"
 #include "queue.h"
-
 
 char* baseURL="https://en.wikipedia.org";
 
@@ -87,8 +88,13 @@ void update_table(long base_loc, int num_links, char** linked_pages, struct Page
 
 
 
-struct Queue *reading_queue;
 
+
+// struct Child_info {
+// 	pid_t PID;
+// 	int pipe;
+// 	long loc;
+// };
 
 
 
@@ -112,6 +118,8 @@ int main(int argc, char* argv[]){
 		else{
 			write_file_name=argv[2];
 		}
+
+		struct Queue* reading_queue;
 		struct Page* first_page=malloc(sizeof(struct Page)); first_page->url="/wiki/C_(programming_language)"; first_page->initialized=false; first_page->num_links=0; first_page->links=NULL; first_page->name="";
 		long first_index=addToTable(first_page,page_hash_table);
 		reading_queue = createQueue();
@@ -123,16 +131,21 @@ int main(int argc, char* argv[]){
 		long page_count=0;
 		long processes_spun=0;
 
+		
 
+		int processed_queue_length = 256;
+		int current_process_index;
 
-		int processed_queue_length = 384;
-		int processed_queue_last_read = 0;
-		int processed_queue_last_started = 0;
 
 		pid_t* child_PIDs=malloc(sizeof(pid_t)*processed_queue_length); memset(child_PIDs,0,sizeof(pid_t)*processed_queue_length);
 		int* child_pipes=malloc(sizeof(int)*processed_queue_length); memset(child_pipes,0,sizeof(int)*processed_queue_length);
 		long* child_locs=malloc(sizeof(long)*processed_queue_length); memset(child_locs,0,sizeof(long)*processed_queue_length);
 		//char** child_urls=malloc(sizeof(char*)*processed_queue_length); memset(child_PIDs,0,sizeof(char*)*processed_queue_length);
+
+		struct Queue* processes_to_create = createQueue();
+		for (int i=0;i<processed_queue_length;i++){
+			enqueue(processes_to_create, i);
+		}
 
 
 
@@ -142,17 +155,24 @@ int main(int argc, char* argv[]){
 		int link_length;
 
 		clock_t t=clock();
-		while ((reading_queue->front!=NULL || processed_queue_last_started!=processed_queue_last_read) && page_hash_table_spots_filled<page_hash_table_size*.99){// && page_hash_table_spots_filled<100000){ //Grab the next thing to process. If it's not NULL...
+		clock_t block_clock=clock();
+
+		//struct pollfd* poll_struct; poll_struct->events=POLLIN;
+		while ((reading_queue->front!=NULL || queueLength(processes_to_create)!=processed_queue_length) && page_hash_table_spots_filled<page_hash_table_size*.99){// && page_hash_table_spots_filled<100000){ //Grab the next thing to process. If it's not NULL...
 			
 			// t=clock();
 			//printf("\nNext key: %li\n", current_loc);
 			
 			//If we have space in the queue of things to be processed and space in the processing table, fork a process to read the next page in the queue
 			
-			while (processed_queue_last_started != processed_queue_last_read-1 && !(processed_queue_last_started==processed_queue_length-1 && processed_queue_last_read==0) && reading_queue->front!=NULL){// && page_hash_table_spots_filled<100000){
-				current_node=dequeue(reading_queue);
+			while (processes_to_create->front!=NULL && reading_queue->front!=NULL){// && page_hash_table_spots_filled<100000){
+				current_node=dequeue(reading_queue); //Grab the next url to process
 				current_loc=current_node->key;
 				current_url=page_hash_table[current_loc]->url;
+				free(current_node);
+
+				current_node=dequeue(processes_to_create);//Grab the index that we will put process info into
+				current_process_index=current_node->key;
 				free(current_node);
 
 				pipe(pipe_ends);
@@ -167,43 +187,63 @@ int main(int argc, char* argv[]){
 					fprintf(stderr, "Failed to convert process!");
 				}
 				else{ //If we are the parent, then do the following
-					processed_queue_last_started=(processed_queue_last_started+1)%processed_queue_length; //Increment to the next one
 					close(pipe_ends[1]);
-					child_pipes[processed_queue_last_started]=pipe_ends[0];
-					child_PIDs[processed_queue_last_started]=PID;
+					child_pipes[current_process_index]=pipe_ends[0];
+					child_PIDs[current_process_index]=PID;
 					//child_urls[processed_queue_last_started]=current_url;
-					child_locs[processed_queue_last_started]=current_loc;
+					child_locs[current_process_index]=current_loc;
 				}
 				processes_spun++;
 			}
-			// fprintf(stderr, "Time to add to grab queue: %fms\n", ((float)(clock()-t))/CLOCKS_PER_SEC*1000);
-			// if (((float)(clock()-t))/CLOCKS_PER_SEC*1000>5){
-			// 	fprintf(stderr,"\n\n");
+			// int ct=0;
+			// while (true){ //Cycle until some pipe has data
+			// 	poll_struct->fd=child_pipes[ct];
+			// 	if (poll(poll_struct, 1, 0)==1){
+			// 		current_process_index=ct;
+			// 		break;
+			// 	}
+			// 	ct+=1;ct%=processed_queue_length;
+			// 	if (ct==0){
+			// 		current_process_index=-1;
+			// 		processed_queue_length++;
+			// 		child_PIDs=realloc(child_PIDs, sizeof(pid_t)*processed_queue_length);
+			// 		child_pipes=realloc(child_pipes, sizeof(int)*processed_queue_length);
+			// 		child_locs=realloc(child_locs, sizeof(long)*processed_queue_length);
+			// 		enqueue(processes_to_create,processed_queue_length-1);
+			// 		child_locs[processed_queue_length-1]=child_pipes[processed_queue_length-1]=child_PIDs[processed_queue_length-1]=0;
+			// 	}
 			// }
-			// t=clock();
-			//Pick one element out of the table and process it
-			processed_queue_last_read=(processed_queue_last_read+1)%processed_queue_length; //Increment to the next one. This is the one we will read out.
-
-			read(child_pipes[processed_queue_last_read],&num_links_read,sizeof(num_links_read)); //Read off number of links
-			links_read=malloc(num_links_read*sizeof(char*)); // Allocate the sapace for each link read out
-
-			for (int i=0;i<num_links_read;i++){ //For each link
-				read(child_pipes[processed_queue_last_read], &link_length, sizeof(link_length)); //Read length
-				links_read[i]=malloc(link_length+1); //Allocate space to hold the link
-				read(child_pipes[processed_queue_last_read],links_read[i],link_length+1); //Write the string, including null terminator
+			current_process_index=0;
+			while (true){ //Cycle until some pipe has data
+				if (poll(&(struct pollfd){ .fd = child_pipes[current_process_index], .events = POLLIN }, 1, 0)==1) {
+					break;
+				}
+				//printf("Cycle!\n");
+				current_process_index++; current_process_index%=processed_queue_length;
 			}
-			close(child_pipes[processed_queue_last_read]);
-			//fprintf(stderr, "Time pre-update: %fms\n", ((float)(clock()-t))/CLOCKS_PER_SEC*1000);
-			update_table(child_locs[processed_queue_last_read], num_links_read, links_read, page_hash_table, reading_queue);
-			waitpid(child_PIDs[processed_queue_last_read], NULL, 0);
+			read(child_pipes[current_process_index],&num_links_read,sizeof(num_links_read)); //Read off number of links
+			links_read=malloc(num_links_read*sizeof(char*)); // Allocate the sapace for each link read out
+			for (int i=0;i<num_links_read;i++){ //For each link
+				read(child_pipes[current_process_index], &link_length, sizeof(link_length)); //Read length
+				links_read[i]=malloc(link_length+1); //Allocate space to hold the link
+				read(child_pipes[current_process_index],links_read[i],link_length+1); //Write the string, including null terminator
+			}
+			close(child_pipes[current_process_index]);
+			update_table(child_locs[current_process_index], num_links_read, links_read, page_hash_table, reading_queue);
+			enqueue(processes_to_create,current_process_index);
 			page_count++; //Update page count
-			// fprintf(stderr, "Time to read to table: %fms\n", ((float)(clock()-t))/CLOCKS_PER_SEC*1000); 
-			// if (((float)(clock()-t))/CLOCKS_PER_SEC*1000>5){
-			// 	fprintf(stderr,"\n\n");
-			// }
-			// t=clock();
+			waitpid(-1, NULL, WNOHANG);
+			child_locs[current_process_index]=child_pipes[current_process_index]=child_PIDs[current_process_index]=0;
+
 			if (page_count%1000==0){
-				fprintf(stderr, "Total read: %li.\n", page_count);
+				int active_blocks=processed_queue_length;
+				for (int i=0;i<processed_queue_length;i++){
+					if (child_PIDs[i]==0){
+						active_blocks--;
+					}
+				}
+				fprintf(stderr, "Total read: %li. Block time: %f seconds. %i active blocks. %i free processes.\n", page_count, ((double)clock()-block_clock)/CLOCKS_PER_SEC, active_blocks, queueLength(processes_to_create));
+				block_clock=clock();
 			}
 		}
 		free(child_PIDs); free(child_pipes); free(child_locs);

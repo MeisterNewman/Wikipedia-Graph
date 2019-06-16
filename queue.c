@@ -33,4 +33,17 @@ struct QNode* dequeue(struct Queue *q){
        q->rear = NULL;
     }
     return temp;
+}
+
+int queueLength(struct Queue *q){
+    if (q->front == NULL){
+       return 0;
+    }
+    int l=1;
+    struct QNode *temp=q->front;
+    while (temp->next!=NULL){
+        temp=temp->next;
+        l++;
+    }
+    return l;
 } 

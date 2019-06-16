@@ -69,7 +69,6 @@ char** readPage(char* URL, int* num_links){
 }
 
 int main(int argc, char* argv[]){
-	clock_t t=clock();
 	//fprintf(stderr, "Starting downlink on %s!\n", argv[1]);
 	int num_links_read; int link_length;
 	char** links_read = readPage(argv[1], &num_links_read); //Process the next queued page.
@@ -80,8 +79,10 @@ int main(int argc, char* argv[]){
 		write(STDOUT_FILENO,links_read[i],link_length+1); //Write the string, including null terminator
 		free(links_read[i]);
 	}
+	close(STDOUT_FILENO);
 	//fprintf(stderr, "Returned %i links!\n", num_links_read);
 	//fprintf(stderr, "Time taken to grab link: %f ms\n", ((float)(clock()-t))/CLOCKS_PER_SEC*1000);
+	//return(atoi(argv[2]));
 	exit(0);
 
 }
