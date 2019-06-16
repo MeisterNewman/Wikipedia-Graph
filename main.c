@@ -6,8 +6,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
-#define PCRE2_CODE_UNIT_WIDTH 8
-#include "readURL.h"
+//#include "readURL.h"
 #include "queue.h"
 
 
@@ -23,6 +22,7 @@ struct Page {
 
 long int page_hash_table_size = 8003537; //Bigger than the current size of Wikipedia. Also prime.
 struct Page** page_hash_table;
+long page_hash_table_spots_filled=0;
 
 unsigned long hash(char* s, int modulus){ //djb2 by Dan Bernstein
 	char* str = s;
@@ -36,17 +36,18 @@ unsigned long hash(char* s, int modulus){ //djb2 by Dan Bernstein
 
 long searchTable(char* URL, struct Page** page_hash_table){
 	long index=hash(URL, page_hash_table_size);
+	//long int steps=0;
 	while (true){
 		if (page_hash_table[index]==NULL){
+			//fprintf(stderr, "Num steps: %li\n", steps);
 			return -1;
 		}
 		if (strcmp((page_hash_table[index])->url,URL)==0){
+			//fprintf(stderr, "Num steps: %li\n", steps);
 			return index;
 		}
-		index++;
-		if (index==page_hash_table_size){
-			index=0;
-		}
+		index=(2*index)%page_hash_table_size;
+		//steps++;
 	}
 }
 
@@ -57,23 +58,12 @@ long addToTable(struct Page* page, struct Page** page_hash_table){
 			page_hash_table[index]=page;
 			return index;
 		}
-		index++;
-		if (index==page_hash_table_size){
-			index=0;
-		}
+		index=(2*index)%page_hash_table_size;
 	}
 }
 
 
-bool trim_pound(char** a){ //Trims the pound sign away from a string
-	long int index=strchr((*a),'#')-(*a);
-	if (index>=0){
-		(*a)=realloc((*a),(index+1)*sizeof(char));
-		(*a)[index]='\0';
-		return true;
-	}
-	return false;
-}
+
 
 void update_table(long base_loc, int num_links, char** linked_pages, struct Page** page_hash_table, struct Queue* q){
 	long* link_locs=malloc(num_links*sizeof(long));
@@ -84,6 +74,7 @@ void update_table(long base_loc, int num_links, char** linked_pages, struct Page
 			struct Page* p=malloc(sizeof(struct Page)); p->url=linked_pages[i]; p->initialized=false; p->num_links=0; p->links=NULL; p->name=""; //Make a page pointer
 			linked_loc=addToTable(p,page_hash_table);
 			enqueue(q, linked_loc); //Add this page to the list of things to be covered.
+			page_hash_table_spots_filled++;
 		}
 		else{
 			free(linked_pages[i]); //It's not getting reused as the url of a made page, so we must free here.
@@ -93,61 +84,6 @@ void update_table(long base_loc, int num_links, char** linked_pages, struct Page
 	page_hash_table[base_loc]->links=link_locs; page_hash_table[base_loc]->num_links=num_links; //Add the links to the table entry.
 	free(linked_pages);
 }
-
-
-
-char** readPage(char* URL, struct Page** page_hash_table, int* num_links){
-	int baseLen=strlen(baseURL);
-	int tailLen=strlen(URL);
-	char* fullURL=malloc(baseLen+tailLen+1);
-	memcpy(fullURL,baseURL,baseLen); memcpy(&fullURL[baseLen],URL,tailLen); fullURL[baseLen+tailLen]='\0';
-	char* pageHTML=getHTML(fullURL);
-	free(fullURL);
-
-	int num_matches;
-	char** links=scanLinks(pageHTML,&num_matches);
-	char* match;
-
-	int num_success=0;
-	char** linked_pages=malloc(num_matches*sizeof(char*));
-	bool ignore;
-	for (int i=0;i<num_matches;i++){
-		//printf("Link being checked: %i\n",i);
-		ignore=false;
-		match = links[i];
-		trim_pound(&match);
-		if (strcmp(URL,match)==0){ //If this link links to its own page, ignore it
-			ignore=true;
-		}
-		if (strchr(match,':')!=0){//If it is a link to a special wikipedia page type (for instance, a 'Category'), ignore it
-			ignore=true;
-		}
-		if (!ignore){
-			for (int j=num_success-1;j>=0;j--){ // If we've already logged a link to this string, ignore it. Going backwards gives large speedup as links tend to be consecutive.
-				if (strcmp(linked_pages[j],match)==0){
-					ignore=true;
-					j=-1;
-				}
-			}
-		}
-		if (ignore){
-			free(match);
-		}
-		else{
-			linked_pages[num_success]=match;
-			num_success++;
-		}
-	}
-	free(links);//All individual links have been freed or are being carried on.
-	free(pageHTML);
-	//printf("Num distinct links found: %i\n", num_success);
-	linked_pages=realloc(linked_pages,num_success*sizeof(char*)); //Scale this down to just hold the new_page links
-	*num_links=num_success;
-	return linked_pages;
-}
-
-
-
 
 
 
@@ -186,10 +122,10 @@ int main(int argc, char* argv[]){
 		char** links_read; int num_links_read;
 		long page_count=0;
 		long processes_spun=0;
-		clock_t t=clock();
 
 
-		int processed_queue_length =64;
+
+		int processed_queue_length = 384;
 		int processed_queue_last_read = 0;
 		int processed_queue_last_started = 0;
 
@@ -205,13 +141,15 @@ int main(int argc, char* argv[]){
 
 		int link_length;
 
-
-		while ((reading_queue->front!=NULL || processed_queue_last_started!=processed_queue_last_read) && page_count<page_hash_table_size*.99 && processes_spun<1030){ //Grab the next thing to process. If it's not NULL...
+		clock_t t=clock();
+		while ((reading_queue->front!=NULL || processed_queue_last_started!=processed_queue_last_read) && page_hash_table_spots_filled<page_hash_table_size*.99){// && page_hash_table_spots_filled<100000){ //Grab the next thing to process. If it's not NULL...
 			
+			// t=clock();
 			//printf("\nNext key: %li\n", current_loc);
 			
 			//If we have space in the queue of things to be processed and space in the processing table, fork a process to read the next page in the queue
-			while (processed_queue_last_started != processed_queue_last_read-1 && !(processed_queue_last_started==0 && processed_queue_last_read==processed_queue_length-1) && reading_queue->front!=NULL && processes_spun<1030){
+			
+			while (processed_queue_last_started != processed_queue_last_read-1 && !(processed_queue_last_started==processed_queue_length-1 && processed_queue_last_read==0) && reading_queue->front!=NULL){// && page_hash_table_spots_filled<100000){
 				current_node=dequeue(reading_queue);
 				current_loc=current_node->key;
 				current_url=page_hash_table[current_loc]->url;
@@ -223,19 +161,10 @@ int main(int argc, char* argv[]){
 					exit(-1);
 				}
 				else if (PID==0){ //If we are the child, process the page.
-					readURLInit();
 					close(pipe_ends[0]);//Close the read end of the pipe immediately.
-					links_read = readPage(current_url, page_hash_table, &num_links_read); //Process the next queued page.
-					write(pipe_ends[1], &num_links_read, sizeof(num_links_read)); //Write number of strings to the pipe
-					for (int i=0;i<num_links_read;i++){ //For each string
-						link_length=strlen(links_read[i]);
-						write(pipe_ends[1], &link_length, sizeof(link_length)); //Write its length
-						write(pipe_ends[1],links_read[i],link_length+1); //Write the string, including null terminator
-						free(links_read[i]);
-					}
-					close(pipe_ends[1]); //Close the write end of the pipe.
-					free(links_read);
-					exit(0);
+					dup2(pipe_ends[1],STDOUT_FILENO); //Make this process write out to the pipe
+					execlp("./grabLinks", "./grabLinks", current_url, (char*) NULL);//Turn to the grabLinks program 
+					fprintf(stderr, "Failed to convert process!");
 				}
 				else{ //If we are the parent, then do the following
 					processed_queue_last_started=(processed_queue_last_started+1)%processed_queue_length; //Increment to the next one
@@ -247,7 +176,11 @@ int main(int argc, char* argv[]){
 				}
 				processes_spun++;
 			}
-
+			// fprintf(stderr, "Time to add to grab queue: %fms\n", ((float)(clock()-t))/CLOCKS_PER_SEC*1000);
+			// if (((float)(clock()-t))/CLOCKS_PER_SEC*1000>5){
+			// 	fprintf(stderr,"\n\n");
+			// }
+			// t=clock();
 			//Pick one element out of the table and process it
 			processed_queue_last_read=(processed_queue_last_read+1)%processed_queue_length; //Increment to the next one. This is the one we will read out.
 
@@ -259,9 +192,19 @@ int main(int argc, char* argv[]){
 				links_read[i]=malloc(link_length+1); //Allocate space to hold the link
 				read(child_pipes[processed_queue_last_read],links_read[i],link_length+1); //Write the string, including null terminator
 			}
+			close(child_pipes[processed_queue_last_read]);
+			//fprintf(stderr, "Time pre-update: %fms\n", ((float)(clock()-t))/CLOCKS_PER_SEC*1000);
 			update_table(child_locs[processed_queue_last_read], num_links_read, links_read, page_hash_table, reading_queue);
 			waitpid(child_PIDs[processed_queue_last_read], NULL, 0);
 			page_count++; //Update page count
+			// fprintf(stderr, "Time to read to table: %fms\n", ((float)(clock()-t))/CLOCKS_PER_SEC*1000); 
+			// if (((float)(clock()-t))/CLOCKS_PER_SEC*1000>5){
+			// 	fprintf(stderr,"\n\n");
+			// }
+			// t=clock();
+			if (page_count%1000==0){
+				fprintf(stderr, "Total read: %li.\n", page_count);
+			}
 		}
 		free(child_PIDs); free(child_pipes); free(child_locs);
 		printf("Runtime: %f\n",((float)(clock()-t))/CLOCKS_PER_SEC);
@@ -293,6 +236,8 @@ int main(int argc, char* argv[]){
 			fputc('\n', write_file);//Terminate every line of the file with a newline character
 		}
 		fclose(write_file);
+
 	}
+	fflush(stdout);
 	
 }

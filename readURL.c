@@ -1,4 +1,4 @@
-// HTML get codeaken from https://stackoverflow.com/questions/13905774/in-c-how-do-you-use-libcurl-to-read-a-http-response-into-a-string
+// HTML get code taken from https://curl.haxx.se/libcurl/c/getinmemory.html
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -9,9 +9,6 @@
 char* base_str="href=\"";
 char* base_str_wiki="href=\"/wiki/";
 
-void readURLInit(){
-    curl_global_init(CURL_GLOBAL_ALL);
-}
 
 char *strndup(const char *s, int n){//Not defined for reasons beyond my comprehension
     char *p = malloc(n+1);
@@ -20,55 +17,54 @@ char *strndup(const char *s, int n){//Not defined for reasons beyond my comprehe
     return p;
 }
 
-size_t write_data(void *ptr, size_t size, size_t nmemb, struct url_data *data) {
-    size_t index = data->size;
-    size_t n = (size * nmemb);
-    char* tmp;
-    data->size += (size * nmemb);
-    tmp = realloc(data->data, data->size + 1); /* +1 for '\0' */
-    if(tmp) {
-        data->data = tmp;
-    }
-    else {
-        if(data->data) {
-            free(data->data);
-        }
-        fprintf(stderr, "Failed to allocate memory.\n");
-        return 0;
-    }
-    memcpy((data->data + index), ptr, n);
-    data->data[data->size] = '\0';
-    return size * nmemb;
+struct MemoryStruct {
+  char *memory;
+  size_t size;
+};
+
+static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp){
+  size_t realsize = size * nmemb;
+  struct MemoryStruct *mem = (struct MemoryStruct *)userp;
+ 
+  char *ptr = realloc(mem->memory, mem->size + realsize + 1);
+  if(ptr == NULL) {
+    /* out of memory! */ 
+    printf("not enough memory (realloc returned NULL)\n");
+    return 0;
+  }
+ 
+  mem->memory = ptr;
+  memcpy(&(mem->memory[mem->size]), contents, realsize);
+  mem->size += realsize;
+  mem->memory[mem->size] = 0;
+ 
+  return realsize;
 }
 
 char* getHTML(char* url) {
+    curl_global_init(CURL_GLOBAL_NOTHING);
     CURL *curl;
-    struct url_data data;
-    data.size = 0;
-    data.data = malloc(4096); /* reasonable size initial buffer */
-    if(NULL == data.data) {
-        fprintf(stderr, "Failed to allocate memory.\n");
-        return NULL;
-    }
-
-    data.data[0] = '\0';
-
     CURLcode res;
+    struct MemoryStruct chunk;
+    chunk.size=0;
+    chunk.memory = malloc(1);
+
+    
 
     curl = curl_easy_init();
     if (curl) {
         curl_easy_setopt(curl, CURLOPT_URL, url);
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_data);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &data);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
         res = curl_easy_perform(curl);
         if(res != CURLE_OK) {
                 fprintf(stderr, "curl_easy_perform() failed: %s\n",  
                         curl_easy_strerror(res));
         }
         curl_easy_cleanup(curl);
-
     }
-    return data.data;
+    curl_global_cleanup();
+    return chunk.memory;
 }
 
 char** scanLinks(char* HTML, int* num_scanned){

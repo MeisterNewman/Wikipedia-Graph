@@ -1,5 +1,16 @@
-wikigraph: main.o queue.o readURL.o
-	gcc -o wikigraph -g3 -Wall -std=c99 -I/home/stephen/anaconda3/include -L/home/stephen/anaconda3/lib/ main.o queue.o readURL.o -l curl # -L/usr/local/lib -l pcre
+make all:
+	make grabLinks
+	make wikigraph
+
+wikigraph: main.o queue.o
+	make grabLinks
+	gcc -o wikigraph -g3 -Wall -std=c99 -I/home/stephen/anaconda3/include -L/home/stephen/anaconda3/lib/ main.o queue.o -l curl # -L/usr/local/lib -l pcre
+
+grabLinks: grabLinks.o readURL.o
+	gcc -o grabLinks -g3 -Wall -std=c99 -I/home/stephen/anaconda3/include -L/home/stephen/anaconda3/lib/ grabLinks.o readURL.o -l curl
+
+grabLinks.o: grabLinks.c
+	gcc -o grabLinks.o -g3 -Wall -std=c99 grabLinks.c -c
 
 main.o: main.c
 	gcc -o main.o -g3 -Wall -std=c99 main.c -c -L/usr/local/lib #-l pcre
