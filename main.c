@@ -133,7 +133,7 @@ int main(int argc, char* argv[]){
 
 		
 
-		int processed_queue_length = 256;
+		int processed_queue_length = 192; //Must be substantially less than 1024, as we cannot have that many file handles open
 		int current_process_index;
 
 
@@ -156,6 +156,8 @@ int main(int argc, char* argv[]){
 
 		clock_t t=clock();
 		clock_t block_clock=clock();
+
+		int scanning_index=0;
 
 		//struct pollfd* poll_struct; poll_struct->events=POLLIN;
 		while ((reading_queue->front!=NULL || queueLength(processes_to_create)!=processed_queue_length) && page_hash_table_spots_filled<page_hash_table_size*.99){// && page_hash_table_spots_filled<100000){ //Grab the next thing to process. If it's not NULL...
@@ -213,13 +215,13 @@ int main(int argc, char* argv[]){
 			// 		child_locs[processed_queue_length-1]=child_pipes[processed_queue_length-1]=child_PIDs[processed_queue_length-1]=0;
 			// 	}
 			// }
-			current_process_index=0;
 			while (true){ //Cycle until some pipe has data
-				if (poll(&(struct pollfd){ .fd = child_pipes[current_process_index], .events = POLLIN }, 1, 0)==1) {
+				if (poll(&(struct pollfd){ .fd = child_pipes[scanning_index], .events = POLLIN }, 1, 0)==1) {
+					current_process_index=scanning_index;
 					break;
 				}
 				//printf("Cycle!\n");
-				current_process_index++; current_process_index%=processed_queue_length;
+				scanning_index++; scanning_index%=processed_queue_length;
 			}
 			read(child_pipes[current_process_index],&num_links_read,sizeof(num_links_read)); //Read off number of links
 			links_read=malloc(num_links_read*sizeof(char*)); // Allocate the sapace for each link read out
@@ -276,7 +278,6 @@ int main(int argc, char* argv[]){
 			fputc('\n', write_file);//Terminate every line of the file with a newline character
 		}
 		fclose(write_file);
-
 	}
 	fflush(stdout);
 	

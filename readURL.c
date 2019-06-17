@@ -42,7 +42,7 @@ static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, voi
 }
 
 char* getHTML(char* url) {
-    curl_global_init(CURL_GLOBAL_NOTHING);
+    //curl_global_init(CURL_GLOBAL_NOTHING);
     CURL *curl;
     CURLcode res;
     struct MemoryStruct chunk;
@@ -51,8 +51,10 @@ char* getHTML(char* url) {
 
     
 
-    curl = curl_easy_init();
-    if (curl) {
+    
+    res=-2;
+    while (res!=CURLE_OK) {
+        curl = curl_easy_init();
         curl_easy_setopt(curl, CURLOPT_URL, url);
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);

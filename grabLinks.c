@@ -18,6 +18,17 @@ bool trim_pound(char** a){ //Trims the pound sign away from a string
 	return false;
 }
 
+int strOrd(const void* s, const void* t){//Recursively compare two strings
+	const char* a = (const char*)s; const char* b = (const char*)t;
+	if (a[0]=='\0' || b[0]>a[0]){
+		return -1;
+	}
+	if (b[0]=='\0' || a[0]<b[0]){
+		return 1;
+	}
+	return strOrd(&a[1],&b[1]);
+}
+
 char** readPage(char* URL, int* num_links){
 	int baseLen=strlen(baseURL);
 	int tailLen=strlen(URL);
@@ -32,6 +43,9 @@ char** readPage(char* URL, int* num_links){
 
 	int num_success=0;
 	char** linked_pages=malloc(num_matches*sizeof(char*));
+
+	qsort(links, num_matches, sizeof(links), &strOrd);
+
 	bool ignore;
 	for (int i=0;i<num_matches;i++){
 		//printf("Link being checked: %i\n",i);
@@ -44,12 +58,9 @@ char** readPage(char* URL, int* num_links){
 		if (strchr(match,':')!=0){//If it is a link to a special wikipedia page type (for instance, a 'Category'), ignore it
 			ignore=true;
 		}
-		if (!ignore){
-			for (int j=num_success-1;j>=0;j--){ // If we've already logged a link to this string, ignore it. Going backwards gives large speedup as links tend to be consecutive.
-				if (strcmp(linked_pages[j],match)==0){
-					ignore=true;
-					j=-1;
-				}
+		if (i>0){
+			if (strcmp(links[i-1],match)==0){
+				ignore=true;
 			}
 		}
 		if (ignore){
@@ -65,6 +76,7 @@ char** readPage(char* URL, int* num_links){
 	//printf("Num distinct links found: %i\n", num_success);
 	linked_pages=realloc(linked_pages,num_success*sizeof(char*)); //Scale this down to just hold the new_page links
 	*num_links=num_success;
+	printf("Num successes: %i\n", num_success);
 	return linked_pages;
 }
 
