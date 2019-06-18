@@ -23,7 +23,7 @@ void enqueue(struct Queue *q, long k){
     q->rear->next = temp;
     q->rear = temp;
 } 
-struct QNode* dequeue(struct Queue *q){ 
+long dequeue(struct Queue *q){ 
     if (q->front == NULL){
        return NULL;
     }
@@ -32,14 +32,16 @@ struct QNode* dequeue(struct Queue *q){
     if (q->front == NULL){
        q->rear = NULL;
     }
-    return temp;
+    long res=temp->key; //This was "return temp"
+    free(temp);
+    return res;
 }
 
-int queueLength(struct Queue *q){
+long queueLength(struct Queue *q){
     if (q->front == NULL){
        return 0;
     }
-    int l=1;
+    long l=1;
     struct QNode *temp=q->front;
     while (temp->next!=NULL){
         temp=temp->next;

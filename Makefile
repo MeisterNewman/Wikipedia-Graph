@@ -1,4 +1,4 @@
-make all:
+make all: 
 	make grabLinks
 	make wikigraph
 

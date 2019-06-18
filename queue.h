@@ -12,7 +12,7 @@ struct Queue{
 struct QNode* newNode(long k);
 struct Queue *createQueue();
 void enqueue(struct Queue *q, long k);
-struct QNode* dequeue(struct Queue *q);
-int queueLength(struct Queue *q);
+long dequeue(struct Queue *q);
+long queueLength(struct Queue *q);
 
 #endif
