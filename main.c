@@ -773,7 +773,7 @@ int main(int argc, char* argv[]){
 
 	if (strcmp(argv[1],"path")==0){
 		if (argc!=4 && argc!=6){ //Arg parsing dirty atm. TODO: clean up, rigorize.
-			fprintf(stderr, "Could not process command. Usage: wikigraph path \"firstlink\" \"secondlink\" (-table \"tablepath\")");
+			fprintf(stderr, "Could not process command. Usage: wikigraph path \"firstpage\" \"secondpage\" (-table \"tablepath\")");
 		}
 		char* table_path;
 		if (argc==4){
