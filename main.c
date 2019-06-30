@@ -1,9 +1,5 @@
 /**
-A Wikipedia mapping and analysis program by Stephen Newman. 2019.
-**/
-
-/**
-TODO: Handle accents properly. Capitalization handling is fundamentally broken (see RISE project vs RISE Project articles). 
+A Wikipedia mapping and analysis program by Stephen Newman. 2019. All software licensed under the GPL v3 license when applicable.
 **/
 
 #include <sys/types.h>
@@ -688,7 +684,7 @@ int main(int argc, char* argv[]){
 			printf("Finished writing file!\n");
 			free(final_page_hash_table);
 			free(page_hash_table);
-		}
+		}	
 	}	
 
 	if (strcmp(argv[1], "pagestats")==0){
