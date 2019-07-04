@@ -58,7 +58,7 @@ char* read_until(FILE* f, char* s, int l){ //Reads from a file until a terminati
 		o[current_len]=fgetc(f);
 		write_char(buf, o[current_len]);
 		current_len++;
-		if (just_read(buf, s, l)){
+		if (just_read(buf, s, l) || o[current_len-1]==EOF){
 			o=realloc(o, current_len-strlen(s)+1);
 			o[current_len-strlen(s)]='\0';
 			free(buf->buffer);
@@ -100,15 +100,18 @@ bool caseless_equal(char* a, char* b){
 
 unsigned long hash(char* s, int modulus){ //djb2 by Dan Bernstein, modified to use lowercase
 	char* str = s;
-    unsigned long hash = 5381;
+    unsigned long hash = 15485863;
     int c;
     while ((c = *str++)){
     	if (c>=65 && c<=90){//Convert to lowercase
     		c+=32;
     	}
-        hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
+        hash = ((hash << 5) + hash) + c; /* hash * 33 + c */\
+        if (hash>=modulus){
+        	hash%=modulus;
+        }
     }
-    return (hash%modulus);
+    return (hash);
 }
 
 long searchTable(char* name, struct Page** page_hash_table, long int table_size){
@@ -121,7 +124,7 @@ long searchTable(char* name, struct Page** page_hash_table, long int table_size)
 		if (caseless_equal((page_hash_table[index])->name,name)){
 			return index;
 		}
-		index=(1+index)%table_size;
+		index=(1+3*index)%table_size;
 		//steps++;
 	}
 }
@@ -133,7 +136,7 @@ long addToTable(struct Page* page, struct Page** page_hash_table, long int table
 			page_hash_table[index]=page;
 			return index;
 		}
-		index=(1+index)%table_size;
+		index=(1+3*index)%table_size;
 	}
 }
 
@@ -168,10 +171,7 @@ struct Page** load_page_hash_table(long int* table_size, char* table_path){
 	fgetc(read_file);
 	printf("\nTable size: %li\n", *table_size);
 	struct Page* current_page;
-
 	int str_len;
-
-
 	struct Page** table = malloc(sizeof(struct Page*) * (*table_size));
 	for (long int i=0;i<(*table_size);i++){
 		fread(&str_len, sizeof(str_len), 1, read_file);
@@ -268,7 +268,6 @@ int main(int argc, char* argv[]){
 			int reader_PID; //Make a pipe to pipe between the reader and the link processor
 			int reader_processor_pipe[2];
 			pipe(reader_processor_pipe);
-
 
 			if ((reader_PID=fork())<0){
 				fprintf(stderr, "Reader-processor fork failed!\n");
@@ -396,15 +395,11 @@ int main(int argc, char* argv[]){
 					int num_distinct_links=0;
 					char** final_links=malloc(num_links_read*sizeof(char*));
 					for (int i=0; i<num_links_read;i++){
-						if (i==0 || !caseless_equal(links_read[i], final_links[num_distinct_links-1])){
-							// if (strncmp(links_read[i], "File:", 5)!=0 && //We no longer check if links are valid here. This will likely incur a substantial size penalty in the table, but will make sure that we keep all pages.
-							// 	strncmp(links_read[i], "Image:", 5)!=0 && 
-							// 	strncmp(links_read[i], "Portal:", 7)!=0 && 
-							// 	strncmp(links_read[i], ":", 1)!=0 &&
-							// 	strchr(links_read[i],':')==NULL){
+						if (num_distinct_links==0 || !caseless_equal(links_read[i], final_links[num_distinct_links-1])){
+							if ((strncmp(links_read[i], "File:", 5) != 0) && (strncmp(links_read[i], "Image:", 6) != 0)){
 								final_links[num_distinct_links]=links_read[i];
 								num_distinct_links++;
-							// }
+							}
 						}
 					}
 
@@ -444,7 +439,7 @@ int main(int argc, char* argv[]){
 			close(start_end_pipe[1]);//Close the write end of the pipe immediately.
 
 
-			long int page_hash_table_size = 32452867; //Bigger than the current size of Wikipedia. Also prime.
+			long int page_hash_table_size = 48000013; //Bigger than the current size of Wikipedia. Also prime.
 			struct Page** page_hash_table=malloc(page_hash_table_size*sizeof(struct Page*)); memset(page_hash_table, 0, page_hash_table_size*sizeof(struct Page*));
 			bool* page_found=malloc(page_hash_table_size*sizeof(bool)); memset(page_found, false, page_hash_table_size*sizeof(bool));
 			long page_hash_table_spots_filled=0;
@@ -454,7 +449,7 @@ int main(int argc, char* argv[]){
 
 
 
-			while (nontabler_alive && page_hash_table_spots_filled<page_hash_table_size*.99){ //The table is not filled and the processor is still giving us content
+			while ((nontabler_alive || poll(&(struct pollfd){ .fd = start_end_pipe[0], .events = POLLIN }, 1, 0)==1) && page_hash_table_spots_filled<page_hash_table_size*.99){ //The table is not filled and the processor is still giving us content
 				int name_length=-1; char* name;
 				read(start_end_pipe[0],&name_length,sizeof(name_length)); //Read off number of links
 				if (name_length==-1){ //We tried to read and got 0 back. This implies that the pipe was closed
@@ -505,7 +500,6 @@ int main(int argc, char* argv[]){
 
 				int status;
 				if (waitpid(nontabler_PID, &status, WNOHANG)==nontabler_PID){//If the reader/processor terminates, note it
-					
 					nontabler_alive=false;
 					printf("Finished reading file!\n");
 					if (status!=0){
@@ -514,6 +508,7 @@ int main(int argc, char* argv[]){
 					}
 				}
 			}
+			printf("Spots filled: %li. Nontabler alive: %i\n", page_hash_table_spots_filled, nontabler_alive);
 
 			printf("Table writer processor time: %f\n",((float)(clock()-t))/CLOCKS_PER_SEC);
 
@@ -533,8 +528,7 @@ int main(int argc, char* argv[]){
 						if (page_hash_table[i]->num_links>0){//If the page has a link
 							if (page_hash_table[page_hash_table[i]->links[(page_hash_table[i]->num_links)-1]]!=NULL){//If the redirect points to a page, put it into the redirect table. Otherwise, pretend it was never there.
 								is_redirect_to[i]=page_hash_table[i]->links[(page_hash_table[i]->num_links)-1];
-							}
-							
+							}							
 						}
 					}
 				}
@@ -636,6 +630,8 @@ int main(int argc, char* argv[]){
 				}
 			}
 
+			printf("Downsized table. Relinking...");
+
 			for (long i=0; i<final_page_hash_table_size; i++){//Correct every link in every page in the final table
 				if (final_page_hash_table[i]!=NULL){
 					for (int j=0; j<final_page_hash_table[i]->num_links; j++){
@@ -689,7 +685,8 @@ int main(int argc, char* argv[]){
 
 	if (strcmp(argv[1], "pagestats")==0){
 		if (argc!=3 && argc!=5){
-			fprintf(stderr, "Could not process command. Usage: wikigraph stats \"pagename\" (-table \"tablepath\")");
+			fprintf(stderr, "Could not process command. Usage: wikigraph pagestats \"pagename\" (-table \"tablepath\")");
+			exit(-1);
 		}
 		char* table_path;
 		if (argc==3){
@@ -720,6 +717,7 @@ int main(int argc, char* argv[]){
 	if (strcmp(argv[1],"stats")==0){ //Arg parsing dirty atm. TODO: clean up, rigorize.
 		if (argc!=2 && argc!=4){
 			fprintf(stderr, "Could not process command. Usage: wikigraph stats (-table \"tablepath\")");
+			exit(-1);
 		}
 		char* table_path;
 		if (argc==2){
@@ -735,7 +733,6 @@ int main(int argc, char* argv[]){
 		long total_dead_links=0;
 
 
-		bool printed=false;
 		for (long i=0;i<page_hash_table_size;i++){
 			if (i%10000==0){
 				printf("Checked %li indices out of %li.\n", i, page_hash_table_size);
@@ -749,21 +746,12 @@ int main(int argc, char* argv[]){
 						total_dead_links++;
 					}
 				}
-				if (!printed && page_hash_table[i]!=NULL){
-					printed=true;
-					printf("Name: %s\n", page_hash_table[i]->name);
-					for (int i=0;i<page_hash_table[i]->num_links;i++){
-						long loc=page_hash_table[i]->links[i];
-						if (page_hash_table[loc]!=NULL){
-							printf("Connected to: %s\n", page_hash_table[loc]->name);
-						}
-					}
-				}
 			}
 		}
 		printf("Total pages: %li\n", total_pages);
 		printf("Total links: %li\n", total_links);
-		printf("Total dead links: %li\n", total_dead_links);
+		printf("Average links per page: %f\n", (float)total_links/total_pages);
+		//printf("Total dead links: %li\n", total_dead_links);
 	}
 
 
