@@ -133,7 +133,7 @@ long searchTable(char* name, struct Page** page_hash_table, long int table_size)
 		if (caseless_equal((page_hash_table[index])->name,name)){
 			return index;
 		}
-		index=(1+3*index)%table_size;
+		index=(1+index)%table_size;
 		//steps++;
 	}
 }
@@ -145,7 +145,7 @@ long addToTable(struct Page* page, struct Page** page_hash_table, long int table
 			page_hash_table[index]=page;
 			return index;
 		}
-		index=(1+3*index)%table_size;
+		index=(1+index)%table_size;
 	}
 }
 
@@ -322,6 +322,7 @@ int main(int argc, char* argv[]){
 							title=read_until(source_file, "</title>",8);//Read off the title
 							if (strncmp("File:",title,5)==0 || strncmp(title, "Image:", 6)==0){
 								free(title);
+								title=NULL;
 								for (int i=0; i<num_links; i++){
 									free(page_links[i]);
 								}
