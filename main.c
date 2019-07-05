@@ -320,6 +320,14 @@ int main(int argc, char* argv[]){
 					else{
 						if (just_read(buf, "<title>", 7) && title==NULL){
 							title=read_until(source_file, "</title>",8);//Read off the title
+							if (strncmp("File:",title,5)==0 || strncmp(title, "Image:", 6)==0){
+								free(title);
+								for (int i=0; i<num_links; i++){
+									free(page_links[i]);
+								}
+								free(page_links);
+								in_page=false;
+							}
 						}
 						if (just_read(buf, "#REDIRECT", 9)){
 							is_redirect=true;
@@ -865,6 +873,17 @@ int main(int argc, char* argv[]){
 			index=random()%page_hash_table_size;
 		}
 		printf("%s\n", page_hash_table[index]->name);
+
+		printf("%i links:\n", page_hash_table[index]->num_links);
+		char** linked_pages=malloc(sizeof(char*) * page_hash_table[index]->num_links);
+		for (int i=0;i<page_hash_table[index]->num_links;i++){
+			linked_pages[i]=page_hash_table[page_hash_table[index]->links[i]]->name;
+		}
+		qsort(linked_pages, page_hash_table[index]->num_links, sizeof(char*), (int(*)(const void *, const void *))&strcmp);
+		for (int i=0;i<page_hash_table[index]->num_links;i++){
+			printf("%s\n", linked_pages[i]);
+		}
+
 		exit(0);
 	}
 	else{

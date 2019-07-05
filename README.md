@@ -17,3 +17,6 @@ wikigraph stats "pagename" (-table "tablepath")
 
 To find a shortest path between two pages:
 wikigraph path "firstpage" "secondpage" (-table "tablepath")
+
+To get a random page and its links:
+wikigraph random (-table "tablepath")
