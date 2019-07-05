@@ -2,7 +2,7 @@
 A program to map Wikipedia and manipulate the map. Written by Stephen Newman.
 All software is provided and licensed under the GNU GPL v3. All software is provided as is -- no guarantees are made as to its effects or functions. Any effects of the software, intentional or otherwise, are the sole responsibility of the user.
 
-To compile a map, the program needs a Wikipedia XML dump file.
+To compile a map, the program needs a Wikipedia XML dump file. A map (the file "table") has been provided as part of this repository. It may or may not be up to date at any given point.
 
 Commands:
 
