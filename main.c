@@ -24,6 +24,15 @@ struct CBuf { //A cyclic buffer to keep track of the last few characters
 	int current_index;
 };
 
+bool isPrime(long x){
+	for (long i=2; i*i<x; i++){
+		if (x%i==0){
+			return false;
+		}
+	}
+	return true;
+}
+
 void write_char(struct CBuf* Buf, char c){
 	Buf->buffer[Buf->current_index]=c;
 	Buf->current_index++;
@@ -169,7 +178,7 @@ struct Page** load_page_hash_table(long int* table_size, char* table_path){
 	FILE* read_file=fopen(table_path, "rb");
 	fread(table_size, sizeof(table_size[0]), 1, read_file);
 	fgetc(read_file);
-	printf("\nTable size: %li\n", *table_size);
+	printf("Table size: %li\n", *table_size);
 	struct Page* current_page;
 	int str_len;
 	struct Page** table = malloc(sizeof(struct Page*) * (*table_size));
@@ -198,7 +207,7 @@ struct Page** load_page_hash_table(long int* table_size, char* table_path){
 		}
 		fgetc(read_file);
 	}
-	printf("Table read finished.\n");
+	//printf("Table read finished.\n");
 	return table;
 }
 
@@ -619,6 +628,11 @@ int main(int argc, char* argv[]){
 			//At this point, we should have flushed all bad entries out of the table. This means that the hash table will no longer function, as the search-paths for various entries will be bad. We need to remake the table.
 
 			long final_page_hash_table_size = 1.1*num_pages_alive;
+			while (!isPrime(final_page_hash_table_size)){
+				final_page_hash_table_size++;
+			}
+
+
 			struct Page** final_page_hash_table = malloc(sizeof(struct Page*)*final_page_hash_table_size); memset(final_page_hash_table, 0, sizeof(struct Page*)*final_page_hash_table_size);
 
 			printf("Table purge complete. %li pages remaining. Shrinking table to length %li...\n", num_pages_alive, final_page_hash_table_size);
@@ -683,7 +697,7 @@ int main(int argc, char* argv[]){
 		}	
 	}	
 
-	if (strcmp(argv[1], "pagestats")==0){
+	else if (strcmp(argv[1], "pagestats")==0){
 		if (argc!=3 && argc!=5){
 			fprintf(stderr, "Could not process command. Usage: wikigraph pagestats \"pagename\" (-table \"tablepath\")");
 			exit(-1);
@@ -714,7 +728,7 @@ int main(int argc, char* argv[]){
 		}
 	}
 
-	if (strcmp(argv[1],"stats")==0){ //Arg parsing dirty atm. TODO: clean up, rigorize.
+	else if (strcmp(argv[1],"stats")==0){ //Arg parsing dirty atm. TODO: clean up, rigorize.
 		if (argc!=2 && argc!=4){
 			fprintf(stderr, "Could not process command. Usage: wikigraph stats (-table \"tablepath\")");
 			exit(-1);
@@ -755,7 +769,7 @@ int main(int argc, char* argv[]){
 	}
 
 
-	if (strcmp(argv[1],"path")==0){
+	else if (strcmp(argv[1],"path")==0){
 		if (argc!=4 && argc!=6){ //Arg parsing dirty atm. TODO: clean up, rigorize.
 			fprintf(stderr, "Could not process command. Usage: wikigraph path \"firstpage\" \"secondpage\" (-table \"tablepath\")");
 		}
@@ -799,7 +813,7 @@ int main(int argc, char* argv[]){
 			}
 		}
 		if (!path_found){
-			printf("No path found!");
+			printf("No path found!\n");
 			exit(0);
 		}
 		long int path_length=1;
@@ -832,6 +846,29 @@ int main(int argc, char* argv[]){
 		}
 		free(predecessors);
 		free(process_queue);
+	}
+	else if (strcmp(argv[1],"random")==0){
+		if (argc!=2 && argc!=4){ //Arg parsing dirty atm. TODO: clean up, rigorize.
+			fprintf(stderr, "Could not process command. Usage: wikigraph path \"firstpage\" \"secondpage\" (-table \"tablepath\")");
+		}
+		char* table_path;
+		if (argc==2){
+			table_path="./table";
+		}
+		else{
+			table_path=argv[3];
+		}
+		long int page_hash_table_size; struct Page** page_hash_table=load_page_hash_table(&page_hash_table_size, table_path);
+		srandom(clock());
+		long index=random()%page_hash_table_size;
+		while (page_hash_table[index]==NULL){
+			index=random()%page_hash_table_size;
+		}
+		printf("%s\n", page_hash_table[index]->name);
+		exit(0);
+	}
+	else{
+		printf("Command not recognized!\n");
 	}
 }
 
