@@ -19,6 +19,8 @@ A Wikipedia mapping and analysis program by Stephen Newman. 2019. All software l
 
 #define BUF_LENGTH 10
 
+#define TABLE_STEP 104729
+
 struct CBuf { //A cyclic buffer to keep track of the last few characters
 	char buffer[BUF_LENGTH];
 	int current_index;
@@ -133,7 +135,7 @@ long searchTable(char* name, struct Page** page_hash_table, long int table_size)
 		if (caseless_equal((page_hash_table[index])->name,name)){
 			return index;
 		}
-		index=(1+index)%table_size;
+		index=(TABLE_STEP+index)%table_size;
 		//steps++;
 	}
 }
@@ -145,7 +147,7 @@ long addToTable(struct Page* page, struct Page** page_hash_table, long int table
 			page_hash_table[index]=page;
 			return index;
 		}
-		index=(1+index)%table_size;
+		index=(TABLE_STEP+index)%table_size;
 	}
 }
 
