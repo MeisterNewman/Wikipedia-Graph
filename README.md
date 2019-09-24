@@ -20,3 +20,6 @@ wikigraph path "firstpage" "secondpage" (-table "tablepath")
 
 To get a random page and its links:
 wikigraph random (-table "tablepath")
+
+
+Tempnote: As of September 24, 2019, the current version of the program is not working. Older versions are more likely to work, but are slow. Will update when this is fixed.
