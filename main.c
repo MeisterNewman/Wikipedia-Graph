@@ -19,21 +19,10 @@ A Wikipedia mapping and analysis program by Stephen Newman. 2019. All software l
 
 #define BUF_LENGTH 10
 
-#define TABLE_STEP 104729
-
 struct CBuf { //A cyclic buffer to keep track of the last few characters
 	char buffer[BUF_LENGTH];
 	int current_index;
 };
-
-bool isPrime(long x){
-	for (long i=2; i*i<x; i++){
-		if (x%i==0){
-			return false;
-		}
-	}
-	return true;
-}
 
 void write_char(struct CBuf* Buf, char c){
 	Buf->buffer[Buf->current_index]=c;
@@ -135,7 +124,7 @@ long searchTable(char* name, struct Page** page_hash_table, long int table_size)
 		if (caseless_equal((page_hash_table[index])->name,name)){
 			return index;
 		}
-		index=(TABLE_STEP+index)%table_size;
+		index=(1+index)%table_size;
 		//steps++;
 	}
 }
@@ -147,7 +136,7 @@ long addToTable(struct Page* page, struct Page** page_hash_table, long int table
 			page_hash_table[index]=page;
 			return index;
 		}
-		index=(TABLE_STEP+index)%table_size;
+		index=(1+index)%table_size;
 	}
 }
 
@@ -180,7 +169,7 @@ struct Page** load_page_hash_table(long int* table_size, char* table_path){
 	FILE* read_file=fopen(table_path, "rb");
 	fread(table_size, sizeof(table_size[0]), 1, read_file);
 	fgetc(read_file);
-	printf("Table size: %li\n", *table_size);
+	printf("\nTable size: %li\n", *table_size);
 	struct Page* current_page;
 	int str_len;
 	struct Page** table = malloc(sizeof(struct Page*) * (*table_size));
@@ -209,7 +198,7 @@ struct Page** load_page_hash_table(long int* table_size, char* table_path){
 		}
 		fgetc(read_file);
 	}
-	//printf("Table read finished.\n");
+	printf("Table read finished.\n");
 	return table;
 }
 
@@ -322,15 +311,6 @@ int main(int argc, char* argv[]){
 					else{
 						if (just_read(buf, "<title>", 7) && title==NULL){
 							title=read_until(source_file, "</title>",8);//Read off the title
-							if (strncmp("File:",title,5)==0 || strncmp(title, "Image:", 6)==0){
-								free(title);
-								title=NULL;
-								for (int i=0; i<num_links; i++){
-									free(page_links[i]);
-								}
-								free(page_links);
-								in_page=false;
-							}
 						}
 						if (just_read(buf, "#REDIRECT", 9)){
 							is_redirect=true;
@@ -639,11 +619,6 @@ int main(int argc, char* argv[]){
 			//At this point, we should have flushed all bad entries out of the table. This means that the hash table will no longer function, as the search-paths for various entries will be bad. We need to remake the table.
 
 			long final_page_hash_table_size = 1.1*num_pages_alive;
-			while (!isPrime(final_page_hash_table_size)){
-				final_page_hash_table_size++;
-			}
-
-
 			struct Page** final_page_hash_table = malloc(sizeof(struct Page*)*final_page_hash_table_size); memset(final_page_hash_table, 0, sizeof(struct Page*)*final_page_hash_table_size);
 
 			printf("Table purge complete. %li pages remaining. Shrinking table to length %li...\n", num_pages_alive, final_page_hash_table_size);
@@ -652,6 +627,9 @@ int main(int argc, char* argv[]){
 			for (long i=0; i<page_hash_table_size; i++){//Add every page remaining in the page table to the final table
 				if (page_hash_table[i]!=NULL){
 					moved_to_index[i] = addToTable(page_hash_table[i], final_page_hash_table, final_page_hash_table_size);
+				}
+				if (i%10000==0){
+					printf("Processed %li indices out of %li\n", i, page_hash_table_size);
 				}
 			}
 
@@ -665,6 +643,9 @@ int main(int argc, char* argv[]){
 						}
 						final_page_hash_table[i]->links[j]=moved_to_index[final_page_hash_table[i]->links[j]];
 					}
+				}
+				if (i%10000==0){
+					printf("Relinked %li indices out of %li\n", i, final_page_hash_table_size);
 				}
 			}
 
@@ -824,7 +805,7 @@ int main(int argc, char* argv[]){
 			}
 		}
 		if (!path_found){
-			printf("No path found!\n");
+			printf("No path found!");
 			exit(0);
 		}
 		long int path_length=1;
@@ -893,6 +874,7 @@ int main(int argc, char* argv[]){
 		printf("Command not recognized!\n");
 	}
 }
+
 
 
 
